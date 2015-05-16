@@ -1,0 +1,7 @@
+*.pyc
+*.pkl
+vgg
+data
+embeddings
+.ipynb_checkpoints/
+calculate_wups.py
