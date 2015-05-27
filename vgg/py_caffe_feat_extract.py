@@ -180,7 +180,7 @@ def caffe_extract_feats(path_imgs, path_model_def, path_model, layer, WITH_GPU =
     caffe_net = caffe.Classifier(path_model_def, path_model, image_dims = (224,224), raw_scale = 255, channel_swap=(2,1,0),
                             mean = np.array([103.939, 116.779, 123.68]) )
 
-    feats = np.zeros((4096, len(path_imgs)))
+    feats = None
     
     for b in range(0, len(path_imgs), batch_size):
         list_imgs = []
@@ -193,20 +193,28 @@ def caffe_extract_feats(path_imgs, path_model_def, path_model, layer, WITH_GPU =
         caffe_input = np.asarray([preprocess_image(in_) for in_ in list_imgs]) #preprocess the images
 
         predictions = caffe_net.forward(data = caffe_input)
-        predictions = predictions[caffe_net.outputs[0]].transpose()
-        features = caffe_net.blobs[layer].data.transpose()
-        print features.shape
+        predictions = predictions[caffe_net.outputs[0]]
+        print caffe_net.blobs.keys()
+        print layer
+        features = caffe_net.blobs[layer].data
+        print "before: ", features.shape
+        dims = features.shape[1] if features.ndim > 2 else 1
+        features = features.reshape((features.shape[0], dims, -1))
+        print "after: ", features.shape
+
+        if feats is None:
+            feats = np.zeros(tuple([len(path_imgs)] + list(features.shape[1:])), dtype=np.float32)
         
         if i < len(path_imgs):
-            feats[:,b:i+1] = features
+            feats[b:i+1] = features
             n = i+1
         else:
             n = min(batch_size, len(path_imgs) - b) 
-            feats[:,b:b+n] = features[:,0:n] #Removing extra features, due to the extra last image appending.
+            feats[b:b+n] = features[0:n] #Removing extra features, due to the extra last image appending.
             n += b 
         print "%d out of %d done....."%(n,len(path_imgs))
 
-    return feats.transpose()
+    return feats
     
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -252,6 +260,7 @@ if __name__ == '__main__':
     out_path = os.path.join(out_directory, args.ofile)
     print "Saving prediction to disk %s"%(out_path)
 
-    cPickle.dump(feats, open(out_path, 'wb'))
+    np.save(out_path, feats)
+    #cPickle.dump(feats, open(out_path, 'wb'), protocol=-1)
     
     print "Have a Good day!"
